@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Professional Source Code Viewer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- Highlight.js -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
+<style>
+/* ===== GLOBAL ===== */
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: Consolas, monospace;
+}
+
+/* ===== HEADER ===== */
+header {
+    display: flex;
+    gap: 10px;
+    padding: 12px;
+    background: linear-gradient(90deg,#161b22,#0d1117);
+    border-bottom: 1px solid #30363d;
+}
+
+header input {
+    flex: 1;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+header button {
+    background: linear-gradient(135deg,#238636,#2ea043);
+    border: none;
+    color: white;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+/* ===== TOOLBAR ===== */
+.toolbar {
+    display: flex;
+    gap: 10px;
+    padding: 8px;
+    background: #0d1117;
+    border-bottom: 1px solid #30363d;
+}
+
+.toolbar button {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+/* ===== TABS ===== */
+.tabs {
+    display: flex;
+    background: #161b22;
+}
+
+.tab {
+    padding: 10px 16px;
+    cursor: pointer;
+    border-right: 1px solid #30363d;
+}
+
+.tab.active {
+    background: #0d1117;
+    border-bottom: 2px solid #58a6ff;
+    color: #58a6ff;
+}
+
+/* ===== EDITOR ===== */
+.editor {
+    display: flex;
+    height: calc(100vh - 140px);
+    background: #0d1117;
+}
+
+.lines {
+    padding: 10px 8px;
+    background: #161b22;
+    text-align: right;
+    color: #6e7681;
+    user-select: none;
+    overflow: hidden;
+    min-width: 50px;
+}
+
+pre {
+    margin: 0;
+    flex: 1;
+    overflow: auto;
+}
+
+code {
+    display: block;
+    padding: 10px;
+    min-height: 100%;
+}
+
+/* ===== FOOTER ===== */
+footer {
+    text-align: center;
+    font-size: 12px;
+    padding: 6px;
+    color: #6e7681;
+    border-top: 1px solid #30363d;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <input id="urlInput" placeholder="https://example.com">
+    <button onclick="loadSource()">View Source</button>
+</header>
+
+<div class="toolbar">
+    <button onclick="copyCode()">Copy</button>
+    <button onclick="downloadCode()">Download</button>
+</div>
+
+<div class="tabs">
+    <div class="tab active" onclick="switchTab('html',this)">HTML</div>
+    <div class="tab" onclick="switchTab('css',this)">CSS</div>
+    <div class="tab" onclick="switchTab('js',this)">JS</div>
+</div>
+
+<div class="editor">
+    <div class="lines" id="lines"></div>
+    <pre id="codeScroll">
+        <code id="viewer" class="html"></code>
+    </pre>
+</div>
+
+<footer>
+    Professional Source Code Viewer • Single HTML Tool
+</footer>
+
+<script>
+let rawHTML = "";
+let currentCode = "";
+
+const codeScroll = document.getElementById("codeScroll");
+const linesDiv = document.getElementById("lines");
+
+/* ===== SCROLL SYNC (MAIN FIX) ===== */
+codeScroll.addEventListener("scroll", () => {
+    linesDiv.scrollTop = codeScroll.scrollTop;
+});
+
+/* ===== LOAD SOURCE ===== */
+async function loadSource() {
+    const url = document.getElementById("urlInput").value.trim();
+    if (!url) return alert("Please enter a URL");
+
+    const proxy = "https://api.allorigins.win/raw?url=";
+    try {
+        const res = await fetch(proxy + encodeURIComponent(url));
+        rawHTML = await res.text();
+        showHTML();
+    } catch {
+        alert("Unable to fetch source (proxy blocked)");
+    }
+}
+
+/* ===== TAB SWITCH ===== */
+function switchTab(type, el) {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    el.classList.add("active");
+
+    if (type === "html") showHTML();
+    if (type === "css") showCSS();
+    if (type === "js") showJS();
+}
+
+/* ===== DISPLAY FUNCTIONS ===== */
+function showHTML() {
+    render(rawHTML, "html");
+}
+
+function showCSS() {
+    render(extract(/<style[^>]*>([\s\S]*?)<\/style>/gi), "css");
+}
+
+function showJS() {
+    render(extract(/<script[^>]*>([\s\S]*?)<\/script>/gi), "javascript");
+}
+
+function extract(regex) {
+    let out = "";
+    let m;
+    while ((m = regex.exec(rawHTML)) !== null) {
+        out += m[1] + "\n\n";
+    }
+    return out || "No code found";
+}
+
+/* ===== RENDER ===== */
+function render(code, lang) {
+    currentCode = code;
+    const viewer = document.getElementById("viewer");
+    viewer.className = lang;
+    viewer.textContent = code;
+    hljs.highlightElement(viewer);
+    renderLines(code);
+}
+
+function renderLines(code) {
+    const count = code.split("\n").length;
+    let html = "";
+    for (let i = 1; i <= count; i++) html += i + "<br>";
+    linesDiv.innerHTML = html;
+}
+
+/* ===== UTILITIES ===== */
+function copyCode() {
+    navigator.clipboard.writeText(currentCode);
+    alert("Code copied");
+}
+
+function downloadCode() {
+    const blob = new Blob([currentCode], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "source-code.txt";
+    a.click();
+}
+</script>
+
+</body>
+</html>
